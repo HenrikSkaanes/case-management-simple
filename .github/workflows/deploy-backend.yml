@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  RESOURCE_GROUP: rg-casemanagement-simple
+  RESOURCE_GROUP: case-management-simple
   CONTAINER_APP_NAME: ca-api-cm-dev
 
 jobs:

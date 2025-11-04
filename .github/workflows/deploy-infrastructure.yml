@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  RESOURCE_GROUP: rg-casemanagement-simple
+  RESOURCE_GROUP: case-management-simple
   LOCATION: norwayeast
   ENVIRONMENT: dev
 
