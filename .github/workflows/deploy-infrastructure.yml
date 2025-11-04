@@ -1,0 +1,76 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/deploy-infrastructure.yml'
+  workflow_dispatch:
+
+env:
+  RESOURCE_GROUP: rg-casemanagement-simple
+  LOCATION: norwayeast
+  ENVIRONMENT: dev
+
+jobs:
+  deploy-infra:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create Resource Group
+        run: |
+          az group create \
+            --name ${{ env.RESOURCE_GROUP }} \
+            --location ${{ env.LOCATION }}
+
+      - name: Deploy Bicep Template
+        id: deploy
+        run: |
+          output=$(az deployment group create \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+            --parameters postgresAdminPassword='${{ secrets.POSTGRES_ADMIN_PASSWORD }}' \
+            --parameters environment=${{ env.ENVIRONMENT }} \
+            --output json)
+          
+          echo "Deployment output:"
+          echo "$output" | jq '.'
+          
+          # Extract outputs
+          echo "acrLoginServer=$(echo $output | jq -r '.properties.outputs.acrLoginServer.value')" >> $GITHUB_OUTPUT
+          echo "acrName=$(echo $output | jq -r '.properties.outputs.acrName.value')" >> $GITHUB_OUTPUT
+          echo "backendApiUrl=$(echo $output | jq -r '.properties.outputs.backendApiUrl.value')" >> $GITHUB_OUTPUT
+
+      - name: Display Deployment Info
+        run: |
+          echo "✅ Infrastructure deployed successfully!"
+          echo "ACR Login Server: ${{ steps.deploy.outputs.acrLoginServer }}"
+          echo "Backend API URL: ${{ steps.deploy.outputs.backendApiUrl }}"
+          
+      - name: Save outputs as artifacts
+        run: |
+          mkdir -p outputs
+          echo "${{ steps.deploy.outputs.acrLoginServer }}" > outputs/acr_login_server.txt
+          echo "${{ steps.deploy.outputs.acrName }}" > outputs/acr_name.txt
+          echo "${{ steps.deploy.outputs.backendApiUrl }}" > outputs/backend_api_url.txt
+          
+      - name: Upload outputs
+        uses: actions/upload-artifact@v3
+        with:
+          name: infra-outputs
+          path: outputs/

@@ -1,0 +1,77 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+env:
+  RESOURCE_GROUP: rg-casemanagement-simple
+  CONTAINER_APP_NAME: ca-api-cm-dev
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get ACR name
+        id: acr-info
+        run: |
+          acrName=$(az acr list \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "[0].name" -o tsv)
+          
+          acrLoginServer=$(az acr list \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "[0].loginServer" -o tsv)
+          
+          echo "acrName=$acrName" >> $GITHUB_OUTPUT
+          echo "acrLoginServer=$acrLoginServer" >> $GITHUB_OUTPUT
+          echo "ACR Name: $acrName"
+          echo "ACR Login Server: $acrLoginServer"
+
+      - name: Build and Push Docker Image
+        run: |
+          # Build and push using ACR build (no need for docker login with managed identity)
+          az acr build \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --registry ${{ steps.acr-info.outputs.acrName }} \
+            --image api:${{ github.sha }} \
+            --image api:latest \
+            --file backend/Dockerfile \
+            backend/
+
+      - name: Update Container App
+        run: |
+          az containerapp update \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --image ${{ steps.acr-info.outputs.acrLoginServer }}/api:${{ github.sha }}
+
+      - name: Get Container App URL
+        run: |
+          apiUrl=$(az containerapp show \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          
+          echo "✅ Backend deployed successfully!"
+          echo "API URL: https://$apiUrl"
+          echo "Health Check: https://$apiUrl/health"
+          echo "API Docs: https://$apiUrl/docs"
