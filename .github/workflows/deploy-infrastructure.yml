@@ -43,9 +43,11 @@ jobs:
           output=$(az deployment group create \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --template-file infra/main.bicep \
-            --parameters infra/main.bicepparam \
-            --parameters postgresAdminPassword='${{ secrets.POSTGRES_ADMIN_PASSWORD }}' \
+            --parameters location=${{ env.LOCATION }} \
             --parameters environment=${{ env.ENVIRONMENT }} \
+            --parameters postgresAdminLogin=caseadmin \
+            --parameters postgresAdminPassword='${{ secrets.POSTGRES_ADMIN_PASSWORD }}' \
+            --parameters companyName='Wrangler Tax Services' \
             --output json)
           
           echo "Deployment output:"
