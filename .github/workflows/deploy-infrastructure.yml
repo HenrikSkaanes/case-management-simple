@@ -70,7 +70,7 @@ jobs:
           echo "${{ steps.deploy.outputs.backendApiUrl }}" > outputs/backend_api_url.txt
           
       - name: Upload outputs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: infra-outputs
           path: outputs/
